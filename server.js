@@ -1,79 +1,87 @@
 const express = require('express');
-const multer = require('multer');
-const { PDFDocument } = require('pdf-lib');
-const { Document, Packer, Paragraph } = require('docx');
-const mammoth = require('mammoth');
-const { fromBuffer } = require('pdf2pic');
-const fs = require('fs').promises;
-const path = require('path');
+   const multer = require('multer');
+   const cors = require('cors'); // Added for CORS
+   const { PDFDocument } = require('pdf-lib');
+   const { Document, Packer, Paragraph } = require('docx');
+   const mammoth = require('mammoth');
+   const { fromBuffer } = require('pdf2pic');
+   const fs = require('fs').promises;
+   const path = require('path');
 
-const app = express();
-const upload = multer({ dest: 'uploads/' });
+   const app = express();
+   const upload = multer({ dest: 'uploads/' });
 
-app.use(express.static('public'));
+   // Enable CORS for your Hostinger domain
+   app.use(cors({
+     origin: ['https://yourdomain.com', 'http://yourdomain.com'], // Replace with your actual domain
+     methods: ['GET', 'POST'],
+     allowedHeaders: ['Content-Type']
+   }));
 
-app.post('/api/convert', upload.single('file'), async (req, res) => {
-  const { file, body: { conversionType } } = req;
-  if (!file) return res.status(400).send('No file uploaded');
+   app.use(express.static('public'));
 
-  try {
-    let outputBuffer;
-    let outputMime;
+   app.post('/api/convert', upload.single('file'), async (req, res) => {
+     const { file, body: { conversionType } } = req;
+     if (!file) return res.status(400).send('No file uploaded');
 
-    switch (conversionType) {
-      case 'word-to-pdf':
-        const docxBuffer = await mammoth.convertToHtml({ path: file.path });
-        const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
-        page.drawText(docxBuffer.value, { x: 50, y: height - 50 });
-        outputBuffer = await pdfDoc.save();
-        outputMime = 'application/pdf';
-        break;
+     try {
+       let outputBuffer;
+       let outputMime;
 
-      case 'pdf-to-word':
-        const pdfText = await mammoth.convertToHtml({ path: file.path });
-        const doc = new Document({
-          sections: [{ children: [new Paragraph(pdfText.value)] }],
-        });
-        outputBuffer = await Packer.toBuffer(doc);
-        outputMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        break;
+       switch (conversionType) {
+         case 'word-to-pdf':
+           const docxBuffer = await mammoth.convertToHtml({ path: file.path });
+           const pdfDoc = await PDFDocument.create();
+           const page = pdfDoc.addPage();
+           const { width, height } = page.getSize();
+           page.drawText(docxBuffer.value, { x: 50, y: height - 50 });
+           outputBuffer = await pdfDoc.save();
+           outputMime = 'application/pdf';
+           break;
 
-      case 'jpeg-to-pdf':
-        const imageBuffer = await fs.readFile(file.path);
-        const pdf = await PDFDocument.create();
-        const pageImage = pdf.addPage();
-        const jpgImage = await pdf.embedJpg(imageBuffer);
-        const { width: imgWidth, height: imgHeight } = pageImage.getSize();
-        pageImage.drawImage(jpgImage, { x: 0, y: 0, width: imgWidth, height: imgHeight });
-        outputBuffer = await pdf.save();
-        outputMime = 'application/pdf';
-        break;
+         case 'pdf-to-word':
+           const pdfText = await mammoth.convertToHtml({ path: file.path });
+           const doc = new Document({
+             sections: [{ children: [new Paragraph(pdfText.value)] }],
+           });
+           outputBuffer = await Packer.toBuffer(doc);
+           outputMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+           break;
 
-      case 'pdf-to-jpeg':
-        const output = fromBuffer(await fs.readFile(file.path), {
-          format: 'jpeg',
-          width: 1024,
-          height: 1024,
-        });
-        outputBuffer = await output.bulk(-1);
-        outputMime = 'image/jpeg';
-        break;
+         case 'jpeg-to-pdf':
+           const imageBuffer = await fs.readFile(file.path);
+           const pdf = await PDFDocument.create();
+           const pageImage = pdf.addPage();
+           const jpgImage = await pdf.embedJpg(imageBuffer);
+           const { width: imgWidth, height: imgHeight } = pageImage.getSize();
+           pageImage.drawImage(jpgImage, { x: 0, y: 0, width: imgWidth, height: imgHeight });
+           outputBuffer = await pdf.save();
+           outputMime = 'application/pdf';
+           break;
 
-      default:
-        return res.status(400).send('Invalid conversion type');
-    }
+         case 'pdf-to-jpeg':
+           const output = fromBuffer(await fs.readFile(file.path), {
+             format: 'jpeg',
+             width: 1024,
+             height: 1024,
+           });
+           outputBuffer = await output.bulk(-1);
+           outputMime = 'image/jpeg';
+           break;
 
-    res.set('Content-Type', outputMime);
-    res.send(outputBuffer);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Conversion error');
-  } finally {
-    await fs.unlink(file.path);
-  }
-});
+         default:
+           return res.status(400).send('Invalid conversion type');
+       }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+       res.set('Content-Type', outputMime);
+       res.send(outputBuffer);
+     } catch (error) {
+       console.error(error);
+       res.status(500).send('Conversion error');
+     } finally {
+       await fs.unlink(file.path);
+     }
+   });
+
+   const PORT = process.env.PORT || 3000;
+   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
