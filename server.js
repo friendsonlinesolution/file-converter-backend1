@@ -12,7 +12,7 @@ const express = require('express');
    const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
    app.use(cors({
-     origin: ['https://lifetechgyan.com', 'https://lifetechgyan.com'], // Replace with your actual domain
+     origin: ['https://lifetechgyan.com', 'http://lifetechgyan.com'],
      methods: ['GET', 'POST'],
      allowedHeaders: ['Content-Type']
    }));
@@ -24,9 +24,23 @@ const express = require('express');
      if (!file) return res.status(400).send('No file uploaded');
      console.log(`Received file: ${file.originalname}, Conversion type: ${conversionType}`);
 
+     // Validate file extension
+     const validExtensions = {
+       'word-to-pdf': ['.doc', '.docx'],
+       'pdf-to-word': ['.pdf'],
+       'jpeg-to-pdf': ['.jpg', '.jpeg'],
+       'pdf-to-jpeg': ['.pdf']
+     };
+     const ext = path.extname(file.originalname).toLowerCase();
+     if (!validExtensions[conversionType]?.includes(ext)) {
+       console.log(`Invalid file extension: ${ext} for ${conversionType}`);
+       return res.status(400).send(`Invalid file format. Please upload a ${validExtensions[conversionType].join(' or ')} file.`);
+     }
+
      try {
        let outputBuffer;
        let outputMime;
+       let outputFilename;
 
        switch (conversionType) {
          case 'word-to-pdf':
@@ -35,19 +49,23 @@ const express = require('express');
            const pdfDoc = await PDFDocument.create();
            const page = pdfDoc.addPage();
            const { width, height } = page.getSize();
-           page.drawText(docxBuffer.value, { x: 50, y: height - 50 });
+           const font = await pdfDoc.embedFont('Helvetica');
+           page.setFont(font);
+           page.drawText(docxBuffer.value.replace(/<[^>]+>/g, ''), { x: 50, y: height - 50, size: 12 });
            outputBuffer = await pdfDoc.save();
            outputMime = 'application/pdf';
+           outputFilename = file.originalname.replace(/\.[^/.]+$/, '.pdf');
            break;
 
          case 'pdf-to-word':
            console.log('Starting PDF to Word conversion');
            const pdfText = await mammoth.convertToHtml({ path: file.path });
            const doc = new Document({
-             sections: [{ children: [new Paragraph(pdfText.value)] }],
+             sections: [{ children: [new Paragraph(pdfText.value.replace(/<[^>]+>/g, ''))] }],
            });
            outputBuffer = await Packer.toBuffer(doc);
            outputMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+           outputFilename = file.originalname.replace(/\.[^/.]+$/, '.docx');
            break;
 
          case 'jpeg-to-pdf':
@@ -60,6 +78,7 @@ const express = require('express');
            pageImage.drawImage(jpgImage, { x: 0, y: 0, width: imgWidth, height: imgHeight });
            outputBuffer = await pdf.save();
            outputMime = 'application/pdf';
+           outputFilename = file.originalname.replace(/\.[^/.]+$/, '.pdf');
            break;
 
          case 'pdf-to-jpeg':
@@ -71,6 +90,7 @@ const express = require('express');
            });
            outputBuffer = await output.bulk(-1);
            outputMime = 'image/jpeg';
+           outputFilename = file.originalname.replace(/\.[^/.]+$/, '.jpg');
            break;
 
          default:
@@ -79,6 +99,7 @@ const express = require('express');
        }
 
        res.set('Content-Type', outputMime);
+       res.set('Content-Disposition', `attachment; filename="${outputFilename}"`);
        res.send(outputBuffer);
      } catch (error) {
        console.error(`Conversion failed: ${error.message}`);
