@@ -13,7 +13,7 @@ const express = require('express');
 
    // Enable CORS for your Hostinger domain
    app.use(cors({
-     origin: ['https://yourdomain.com', 'http://yourdomain.com'], // Replace with your actual domain
+     origin: ['https://lifetechgyan.com', 'https://lifetechgyan.com'], // Replace with your actual domain
      methods: ['GET', 'POST'],
      allowedHeaders: ['Content-Type']
    }));
