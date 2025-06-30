@@ -45,8 +45,8 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
         const pdf = await PDFDocument.create();
         const pageImage = pdf.addPage();
         const jpgImage = await pdf.embedJpg(imageBuffer);
-        const { width, height } = pageImage.getSize();
-        pageImage.drawImage(jpgImage, { x: 0, y: 0, width, height });
+        const { width: imgWidth, height: imgHeight } = pageImage.getSize();
+        pageImage.drawImage(jpgImage, { x: 0, y: 0, width: imgWidth, height: imgHeight });
         outputBuffer = await pdf.save();
         outputMime = 'application/pdf';
         break;
