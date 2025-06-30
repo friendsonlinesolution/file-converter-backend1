@@ -1,6 +1,6 @@
 const express = require('express');
    const multer = require('multer');
-   const cors = require('cors'); // Added for CORS
+   const cors = require('cors');
    const { PDFDocument } = require('pdf-lib');
    const { Document, Packer, Paragraph } = require('docx');
    const mammoth = require('mammoth');
@@ -9,9 +9,8 @@ const express = require('express');
    const path = require('path');
 
    const app = express();
-   const upload = multer({ dest: 'uploads/' });
+   const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
-   // Enable CORS for your Hostinger domain
    app.use(cors({
      origin: ['https://lifetechgyan.com', 'https://lifetechgyan.com'], // Replace with your actual domain
      methods: ['GET', 'POST'],
@@ -23,6 +22,7 @@ const express = require('express');
    app.post('/api/convert', upload.single('file'), async (req, res) => {
      const { file, body: { conversionType } } = req;
      if (!file) return res.status(400).send('No file uploaded');
+     console.log(`Received file: ${file.originalname}, Conversion type: ${conversionType}`);
 
      try {
        let outputBuffer;
@@ -30,6 +30,7 @@ const express = require('express');
 
        switch (conversionType) {
          case 'word-to-pdf':
+           console.log('Starting Word to PDF conversion');
            const docxBuffer = await mammoth.convertToHtml({ path: file.path });
            const pdfDoc = await PDFDocument.create();
            const page = pdfDoc.addPage();
@@ -40,6 +41,7 @@ const express = require('express');
            break;
 
          case 'pdf-to-word':
+           console.log('Starting PDF to Word conversion');
            const pdfText = await mammoth.convertToHtml({ path: file.path });
            const doc = new Document({
              sections: [{ children: [new Paragraph(pdfText.value)] }],
@@ -49,6 +51,7 @@ const express = require('express');
            break;
 
          case 'jpeg-to-pdf':
+           console.log('Starting JPEG to PDF conversion');
            const imageBuffer = await fs.readFile(file.path);
            const pdf = await PDFDocument.create();
            const pageImage = pdf.addPage();
@@ -60,6 +63,7 @@ const express = require('express');
            break;
 
          case 'pdf-to-jpeg':
+           console.log('Starting PDF to JPEG conversion');
            const output = fromBuffer(await fs.readFile(file.path), {
              format: 'jpeg',
              width: 1024,
@@ -70,16 +74,23 @@ const express = require('express');
            break;
 
          default:
+           console.log('Invalid conversion type');
            return res.status(400).send('Invalid conversion type');
        }
 
        res.set('Content-Type', outputMime);
        res.send(outputBuffer);
      } catch (error) {
-       console.error(error);
-       res.status(500).send('Conversion error');
+       console.error(`Conversion failed: ${error.message}`);
+       console.error(error.stack);
+       res.status(500).send(`Conversion error: ${error.message}`);
      } finally {
-       await fs.unlink(file.path);
+       try {
+         await fs.unlink(file.path);
+         console.log('Temporary file deleted');
+       } catch (deleteError) {
+         console.error(`Failed to delete temporary file: ${deleteError.message}`);
+       }
      }
    });
 
