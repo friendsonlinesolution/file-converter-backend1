@@ -4,7 +4,6 @@ const express = require('express');
    const { PDFDocument } = require('pdf-lib');
    const { Document, Packer, Paragraph } = require('docx');
    const mammoth = require('mammoth');
-   const { fromBuffer } = require('pdf2pic');
    const fs = require('fs').promises;
    const path = require('path');
 
@@ -82,15 +81,8 @@ const express = require('express');
            break;
 
          case 'pdf-to-jpeg':
-           console.log('Starting PDF to JPEG conversion');
-           const output = fromBuffer(await fs.readFile(file.path), {
-             format: 'jpeg',
-             width: 1024,
-             height: 1024,
-           });
-           outputBuffer = await output.bulk(-1);
-           outputMime = 'image/jpeg';
-           outputFilename = file.originalname.replace(/\.[^/.]+$/, '.jpg');
+           console.log('PDF to JPEG conversion disabled due to missing dependencies');
+           return res.status(400).send('PDF to JPEG conversion is currently disabled');
            break;
 
          default:
